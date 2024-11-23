@@ -3,30 +3,28 @@ use std::io::{self, Write};
 use winreg::RegKey;
 
 fn main() {
-    let exe_path = env::current_exe().unwrap();
-    println!("Current executable path is `{}`", exe_path.display());
+    let exe_path = env::current_exe().unwrap().display().to_string();
+    println!("Current executable path is `{}`", exe_path);
     if let Some(hkey_path_reg) = get_registration_path("cocogoat-control") {
         let hkey_path = hkey_path_reg.split('"').nth(1).unwrap();
-        let exe_path_reg = format!("\"{}\" \"%1\"", exe_path.display());
         println!(
             "Found registration for scheme `cocogoat-control` at path `{}`",
             hkey_path
         );
 
-        if hkey_path != exe_path_reg {
+        if hkey_path != exe_path {
             if prompt_user("Do you want to update the registration to point to current executable? [Y/N] ") {
-                regist_path("cocogoat-control", &exe_path_reg);
+                regist_path("cocogoat-control", &exe_path);
             } else {
-                eprintln!("Operation cancelled by the user");
+                panic!("Operation cancelled by the user");
             }
         }
     } else {
         println!("Not found registration for scheme `cocogoat-control`");
-        let exe_path_reg = format!("\"{}\" \"%1\"", exe_path.display());
         if prompt_user("Do you want to add the registration to point to current executable? [y/N] ") {
-            regist_path("cocogoat-control", &exe_path_reg);
+            regist_path("cocogoat-control", &exe_path);
         } else {
-            eprintln!("Operation cancelled by the user");
+            panic!("Operation cancelled by the user");
         }
     }
 }
@@ -77,6 +75,8 @@ fn regist_path(scheme: &str, path: &str) {
     let (hkey_open, _) = hkey_scheme.create_subkey("shell\\open\\command").unwrap();
     hkey_icon.set_value("", &icon_path_str).unwrap();
     hkey_open.set_value("", &command_str).unwrap();
+
+    println!("Registration for scheme `{}` has been updated", scheme);
 }
 
 fn prompt_user(message: &str) -> bool {
