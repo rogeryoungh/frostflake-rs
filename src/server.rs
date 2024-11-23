@@ -1,19 +1,31 @@
 use crate::utils::prompt_user;
 
 use axum::{
-    extract::State,
-    http::Method,
+    extract::{ws::{Message, WebSocket}, MatchedPath, State, WebSocketUpgrade},
+    http::{HeaderMap, Method, StatusCode},
+    response::Response,
     routing::{get, options, post},
     Json, Router,
 };
 
 use serde_json::{json, Value};
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashSet, os::windows, sync::{Arc, Mutex}
+};
 use tower_http::cors::{Any, CorsLayer};
 use uuid::Uuid;
 
 struct AppState {
-    authorized_tokens: Mutex<Vec<Uuid>>,
+    authorized_tokens: Mutex<HashSet<Uuid>>,
+}
+
+impl AppState {
+    fn insert(&self, token: Uuid) {
+        self.authorized_tokens.lock().unwrap().insert(token);
+    }
+    fn contains(&self, token: &Uuid) -> bool {
+        return self.authorized_tokens.lock().unwrap().contains(&token);
+    }
 }
 
 async fn api_root() -> Json<Value> {
@@ -23,7 +35,7 @@ async fn api_root() -> Json<Value> {
     }));
 }
 
-async fn api_token(header_map: axum::http::HeaderMap, State(state): State<Arc<AppState>>) -> Json<Value> {
+async fn api_token(header_map: HeaderMap, State(state): State<Arc<AppState>>) -> Json<Value> {
     let url = header_map.get("Origin").unwrap().to_str().unwrap();
     let message = format!(
         "Request from {}\nAre you sure you want to generate a new token? [y/N] ",
@@ -31,7 +43,7 @@ async fn api_token(header_map: axum::http::HeaderMap, State(state): State<Arc<Ap
     );
     if prompt_user(&message) {
         let id = Uuid::new_v4();
-        state.authorized_tokens.lock().unwrap().push(id);
+        state.insert(id);
         return Json(json!({
             "hwnd": 114514, // TODO!
             "origin": url,
@@ -46,11 +58,42 @@ async fn api_token(header_map: axum::http::HeaderMap, State(state): State<Arc<Ap
     }
 }
 
+async fn api_ws(path: MatchedPath, ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
+    let path = path.as_str().to_string();
+    let uuid_str = path.split('/').last().unwrap();
+    if let Ok(uuid) = Uuid::parse_str(uuid_str) {
+        if state.contains(&uuid) {
+            return ws.on_upgrade(handle_ws);
+        }
+    }
+    return Response::builder()
+        .status(StatusCode::UNAUTHORIZED)
+        .body(axum::body::Body::empty())
+        .unwrap();
+}
+
+async fn handle_ws(mut socket: WebSocket) {
+    while let Some(msg) = socket.recv().await {
+        let ret = if let Ok(msg) = msg {
+            // let data = Value::from(msg.into_text().unwrap());
+            "Hello, World!"
+        } else {
+            // client disconnected
+            return;
+        };
+
+        if socket.send(Message::Text(ret.to_string())).await.is_err() {
+            // client disconnected
+            return;
+        }
+    }
+}
+
 pub async fn start_server() {
     println!("Server running on http://localhost:32333");
 
     let shared_state = Arc::new(AppState {
-        authorized_tokens: Mutex::new(vec![]),
+        authorized_tokens: Mutex::new(HashSet::new()),
     });
 
     let cors = CorsLayer::new()
@@ -62,6 +105,7 @@ pub async fn start_server() {
         .route("/", get(api_root))
         .route("/token", post(api_token))
         .route("/", options(|| async { "" }))
+        .route("/ws/:uuid", get(api_ws))
         .layer(cors)
         .with_state(shared_state);
 
