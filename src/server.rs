@@ -16,9 +16,7 @@ use axum::{
 
 use serde_json::{json, Value};
 use std::{
-    collections::HashSet,
-    io::{BufRead, BufReader},
-    sync::{Arc, Mutex},
+    collections::HashSet, env, fs, io::{BufRead, BufReader, Write}, path::Path, sync::{Arc, Mutex}
 };
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -153,6 +151,17 @@ async fn make_internal_request(method: String, url: String, body: String) -> Val
     }
 }
 
+async fn api_yas() -> Json<Value> {
+    let mona_json_path = env::current_dir().unwrap().join("mona.json");
+    let mona_json = Path::new(&mona_json_path);
+    if mona_json.exists() {
+        let content = fs::read_to_string(mona_json).unwrap();
+        return Json(serde_json::from_str::<Value>(&content).unwrap());
+    } else {
+        return Json(json!({}));
+    }
+}
+
 async fn handle_ws(mut socket: WebSocket) {
     macro_rules! send_json {
         ($json:expr) => {
@@ -179,12 +188,19 @@ async fn handle_ws(mut socket: WebSocket) {
                 let argv = serde_json::from_str::<Value>(&body).unwrap();
                 let argv = argv["argv"].as_str().unwrap();
                 let command = String::from("C:\\Users\\YOUNG\\Downloads\\yas_artifact_v0.1.18.exe");
-                let child = std::process::Command::new(&command)
+                let mut child = std::process::Command::new(&command)
                     .args(argv.split_whitespace())
+                    .stdin(std::process::Stdio::piped())
                     .stdout(std::process::Stdio::piped())
+                    .stderr(std::process::Stdio::piped())
                     .spawn()
                     .unwrap();
-                let mut reader = BufReader::new(child.stdout.unwrap());
+                if let Some(mut stdin) = child.stdin.take() {
+                    if let Err(e) = writeln!(stdin, "114514") {
+                        eprintln!("Failed to write to stdin: {}", e);
+                    }
+                }
+                let reader = BufReader::new(child.stderr.take().unwrap());
                 send_json!(&json!({
                     "action": "yas-output",
                     "data": format!("{} {}", &command, argv),
@@ -193,12 +209,15 @@ async fn handle_ws(mut socket: WebSocket) {
                     "action": "yas",
                     "data": "load",
                 }));
-                let mut buf = String::new();
-                while let Ok(_) = reader.read_line(&mut buf) {
-                    send_json!(&json!({
-                        "action": "yas-output",
-                        "data": buf,
-                    }));
+                for line in reader.lines() {
+                    println!("line: {:?}", line);
+                    match line {
+                        Ok(line) => send_json!(&json!({
+                            "action": "yas-output",
+                            "data": line,
+                        })),
+                        Err(_) => todo!(),
+                    }
                 }
                 send_json!(&json!({
                     "action": "yas",
@@ -232,6 +251,7 @@ pub async fn start_server() {
         .route("/api/windows/:hwnd", patch(api_patch_windows))
         .route("/ws/:uuid", get(api_ws))
         .route("/api/upgrade/yas", post(api_upgrade_yas).get(api_upgrade_yas))
+        .route("/api/yas", get(api_yas))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(shared_state);
