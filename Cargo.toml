@@ -9,5 +9,8 @@ serde_json = "1.0"
 tokio = { version = "1", features = ["full"] }
 tower-http = { version = "0.6", features = ["cors"] }
 uuid = { version = "1.11", features = ["v4", "fast-rng", "macro-diagnostics"] }
-winapi = "0.3.9"
+windows = { version = "0.58", features = ["Win32", "Win32_UI_WindowsAndMessaging"] }
 winreg = "0.10"
+serde = { version = "1.0", features = ["derive"] }
+reqwest = "0.12.9"
+

@@ -1,10 +1,11 @@
-mod registry;
-mod server;
-mod utils;
+pub mod registry;
+pub mod server;
+pub mod utils;
+pub mod windows;
 
-use registry::{create_scheme_registration, get_registration_path};
-use server::start_server;
-use utils::prompt_user;
+use crate::registry::{create_scheme_registration, get_registration_path};
+use crate::server::start_server;
+use crate::utils::prompt_user;
 
 use std::env;
 
