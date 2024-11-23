@@ -33,7 +33,7 @@ pub fn list_windows() -> Result<Vec<WindowInfo>> {
 pub fn active_window(hwnd: usize) -> Result<()> {
     unsafe {
         let hwnd = HWND(hwnd as *mut _);
-        SetForegroundWindow(hwnd);
+        let _ = SetForegroundWindow(hwnd);
     }
     Ok(())
 }
@@ -45,7 +45,8 @@ unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> B
     let get_window_text = |hwnd: HWND| -> Option<String> {
         let mut buffer = vec![0u16; 1024 as usize];
         if GetWindowTextW(hwnd, &mut buffer) > 0 {
-            return String::from_utf16(&buffer).ok();
+            let s = String::from_utf16(&buffer).unwrap();
+            return Some(String::from(s.trim_end_matches('\0')));
         } else {
             return None;
         }
@@ -53,7 +54,8 @@ unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> B
     let get_class_name = |hwnd: HWND| -> Option<String> {
         let mut buffer = vec![0u16; 1024 as usize];
         if GetClassNameW(hwnd, &mut buffer) > 0 {
-            return String::from_utf16(&buffer).ok();
+            let s = String::from_utf16(&buffer).unwrap();
+            return Some(String::from(s.trim_end_matches('\0')));
         } else {
             return None;
         }
@@ -70,12 +72,12 @@ unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> B
 
     let title = get_window_text(hwnd).unwrap_or("??????".to_string());
     let class_name = get_class_name(hwnd).unwrap_or("??????".to_string());
-    let (x, y, width, height) = get_window_size(hwnd).unwrap_or((0, 0, 0, 0));
+    let (width, height, x, y) = get_window_size(hwnd).unwrap_or((0, 0, 0, 0));
     // 检查窗口是否可见
-    if IsWindowVisible(hwnd).as_bool() && !title.is_empty() && width > 10 && height > 10 {
+    if !title.is_empty() && width > 10 && height > 10 {
         windows.push(WindowInfo {
             class_name,
-            title,
+            title: title.to_string(),
             hwnd: hwnd.0 as usize,
             height,
             width,

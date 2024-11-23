@@ -6,7 +6,7 @@ use crate::{
 use axum::{
     extract::{
         ws::{Message, WebSocket},
-        MatchedPath, State, WebSocketUpgrade,
+        State, WebSocketUpgrade,
     },
     http::{HeaderMap, Method, StatusCode},
     response::Response,
@@ -20,11 +20,15 @@ use std::{
     io::{BufRead, BufReader},
     sync::{Arc, Mutex},
 };
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::{
+    cors::{Any, CorsLayer},
+    trace::TraceLayer,
+};
 use uuid::Uuid;
 
 struct AppState {
     authorized_tokens: Mutex<HashSet<Uuid>>,
+    yas_update: Mutex<i32>,
 }
 
 impl AppState {
@@ -71,9 +75,8 @@ async fn api_api_windows() -> Json<Value> {
     return Json(json!(windows));
 }
 
-async fn api_patch_windows(path: MatchedPath) -> Json<Value> {
-    let path = path.as_str().to_string();
-    let hwnd = path.split('/').last().unwrap();
+async fn api_patch_windows(uri: axum::http::Uri) -> Json<Value> {
+    let hwnd = uri.path().split('/').last().unwrap();
     if hwnd != "null" {
         let hwnd = hwnd.parse::<usize>().unwrap();
         active_window(hwnd).unwrap()
@@ -81,19 +84,9 @@ async fn api_patch_windows(path: MatchedPath) -> Json<Value> {
     return Json(json!({}));
 }
 
-fn run_yas(args: &str) -> (BufReader<std::process::ChildStdout>, &str) {
-    const PATH: &str = "C:\\Users\\YOUNG\\Downloads\\yas_artifact_v0.1.18.exe";
-    let child = std::process::Command::new(PATH)
-        .args(args.split_whitespace())
-        .stdout(std::process::Stdio::piped())
-        .spawn()
-        .unwrap();
-    return (BufReader::new(child.stdout.unwrap()), PATH);
-}
-
-async fn api_ws(path: MatchedPath, ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
-    let path = path.as_str().to_string();
-    let uuid_str = path.split('/').last().unwrap();
+async fn api_ws(uri: axum::http::Uri, ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
+    println!("path: {}", &uri);
+    let uuid_str = uri.path().split('/').last().unwrap();
     if let Ok(uuid) = Uuid::parse_str(uuid_str) {
         if state.contains(&uuid) {
             return ws.on_upgrade(handle_ws);
@@ -105,19 +98,59 @@ async fn api_ws(path: MatchedPath, ws: WebSocketUpgrade, State(state): State<Arc
         .unwrap();
 }
 
+async fn api_upgrade_yas(State(state): State<Arc<AppState>>) -> Response<axum::body::Body> {
+    let mut count = state.yas_update.lock().unwrap();
+    *count += 1;
+    if count.eq(&1) {
+        return Response::builder()
+            .status(StatusCode::CREATED)
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(json!({"msg": "done"}).to_string()))
+            .unwrap();
+    } else {
+        return Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(json!({"msg": "done"}).to_string()))
+            .unwrap();
+    }
+}
+
 async fn make_internal_request(method: String, url: String, body: String) -> Value {
-    let url = "http://127.0.0.1:32333".to_string() + &url;
-    let method = reqwest::Method::from_bytes(method.as_bytes()).unwrap();
-    let response = reqwest::Client::new()
-        .request(method, &url)
-        .body(body)
-        .send()
-        .await
-        .unwrap();
-    return json!({
-        "status": response.status().as_u16(),
-        "body": serde_json::from_str::<Value>(&response.text().await.unwrap()).unwrap(),
-    });
+    let url = format!("http://127.0.0.1:32333{}", url);
+    let method = method.to_uppercase();
+
+    println!("method: {}, url: {}", method, url);
+    let client = reqwest::Client::new();
+
+    let request = match method.to_uppercase().as_str() {
+        "GET" => client.get(&url),
+        "POST" => client.post(&url).body(body),
+        "PUT" => client.put(&url).body(body),
+        "PATCH" => client.patch(&url).body(body),
+        "DELETE" => client.delete(&url),
+        _ => panic!("Unsupported HTTP method"),
+    };
+    let request = request.header("Accept", "application/json");
+    // debug request
+    println!("request: {:?}", request);
+
+    match request.header("Accept", "application/json").send().await {
+        Ok(response) => {
+            let status = response.status().as_u16();
+            let body = response.text().await.unwrap();
+            println!("status: {}, body: {}", status, body);
+            let json = serde_json::from_str::<Value>(&body).unwrap_or_default();
+
+            return json!({
+                "status": status,
+                "body": json,
+            });
+        },
+        Err(err) => {
+            panic!("{}", err)
+        },
+    }
 }
 
 async fn handle_ws(mut socket: WebSocket) {
@@ -181,7 +214,10 @@ pub async fn start_server() {
 
     let shared_state = Arc::new(AppState {
         authorized_tokens: Mutex::new(HashSet::new()),
+        yas_update: Mutex::new(0),
     });
+
+    tracing_subscriber::fmt().with_max_level(tracing::Level::DEBUG).init();
 
     let cors = CorsLayer::new()
         .allow_origin(Any) // 允许所有来源
@@ -192,11 +228,12 @@ pub async fn start_server() {
         .route("/", get(api_root))
         .route("/token", post(api_token))
         .route("/", options(|| async { "" }))
-        .route("/api/windows", post(api_api_windows))
+        .route("/api/windows", get(api_api_windows))
         .route("/api/windows/:hwnd", patch(api_patch_windows))
         .route("/ws/:uuid", get(api_ws))
-        .route("/api/upgrade/yas", options(|| async { Json(json!({"msg": "done"})) }))
+        .route("/api/upgrade/yas", post(api_upgrade_yas).get(api_upgrade_yas))
         .layer(cors)
+        .layer(TraceLayer::new_for_http())
         .with_state(shared_state);
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:32333").await.unwrap();
