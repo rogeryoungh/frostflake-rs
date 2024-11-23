@@ -1,11 +1,15 @@
 mod registry;
+mod server;
+mod utils;
 
 use registry::{create_scheme_registration, get_registration_path};
+use server::start_server;
+use utils::prompt_user;
 
 use std::env;
-use std::io::{self, Write};
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let exe_path = env::current_exe().unwrap().display().to_string();
     println!("Current executable path is `{}`", exe_path);
     if let Some(hkey_path_reg) = get_registration_path("cocogoat-control") {
@@ -30,12 +34,6 @@ fn main() {
             panic!("Operation cancelled by the user");
         }
     }
-}
 
-fn prompt_user(message: &str) -> bool {
-    print!("{}", message);
-    io::stdout().flush().unwrap(); // 确保提示信息立即输出
-    let mut input = String::new();
-    io::stdin().read_line(&mut input).unwrap();
-    return input.trim().to_uppercase() == "Y";
+    start_server().await;
 }
