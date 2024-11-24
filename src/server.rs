@@ -1,6 +1,6 @@
 use crate::{
     utils::prompt_user,
-    windows::{active_window, list_windows, notify_message},
+    windows::{active_window, enable_virtual_terminal_sequences, list_windows, notify_message},
 };
 
 use axum::{
@@ -235,6 +235,7 @@ async fn handle_ws(mut socket: WebSocket) {
 
 pub async fn start_server() {
     println!("Server running on http://localhost:32333");
+    enable_virtual_terminal_sequences().unwrap();
 
     let shared_state = Arc::new(AppState {
         authorized_tokens: Mutex::new(HashSet::new()),

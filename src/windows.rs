@@ -3,6 +3,10 @@ use windows::{
     core::{Result, HSTRING},
     Win32::{
         Foundation::{BOOL, HWND, LPARAM},
+        System::Console::{
+            GetConsoleMode, GetStdHandle, SetConsoleMode, CONSOLE_MODE, ENABLE_VIRTUAL_TERMINAL_PROCESSING,
+            STD_OUTPUT_HANDLE,
+        },
         UI::WindowsAndMessaging::{EnumWindows, GetClassNameW, GetWindowRect, GetWindowTextW, SetForegroundWindow},
     },
     UI::Notifications::{ToastNotification, ToastNotificationManager, ToastTemplateType},
@@ -35,6 +39,17 @@ pub fn active_window(hwnd: usize) -> Result<()> {
     unsafe {
         let hwnd = HWND(hwnd as *mut _);
         let _ = SetForegroundWindow(hwnd);
+    }
+    Ok(())
+}
+
+pub fn enable_virtual_terminal_sequences() -> Result<()> {
+    unsafe {
+        let handle = GetStdHandle(STD_OUTPUT_HANDLE).unwrap();
+        let mut mode: CONSOLE_MODE = CONSOLE_MODE(0);
+        GetConsoleMode(handle, &mut mode as *mut _).unwrap();
+        mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+        SetConsoleMode(handle, mode).unwrap();
     }
     Ok(())
 }
