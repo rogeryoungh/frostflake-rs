@@ -21,15 +21,16 @@ jobs:
       - name: Build (Release)
         run: cargo build --release
 
-      - name: Upload yas_artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: frostflake-rs.exe
           path: ./target/release/frostflake-rs.exe
 
-      - uses: "softprops/action-gh-release@v2"
+      - uses: "marvinpinto/action-automatic-releases@latest"
         with:
-          tag_name: "dev"
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "dev"
           prerelease: true
-          name: "Development Build"
+          title: "Development Build"
           files: ./target/release/frostflake-rs.exe
