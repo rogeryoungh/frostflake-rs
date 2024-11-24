@@ -170,7 +170,7 @@ async fn yas_update(state: Arc<AppState>) {
             let version_file = fs::File::create(config_path).unwrap();
             let new_version = json!({
                 "version": latest_version,
-                "update_at": latest_url,
+                "update_at": latest_update,
                 "url": latest_url
             });
             serde_json::to_writer_pretty(version_file, &new_version).unwrap();
