@@ -27,10 +27,9 @@ jobs:
           name: frostflake-rs.exe
           path: ./target/release/frostflake-rs.exe
 
-      - uses: "marvinpinto/action-automatic-releases@latest"
+      - uses: "softprops/action-gh-release@v2"
         with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "dev"
+          tag_name: "dev"
           prerelease: true
-          title: "Development Build"
+          name: "Development Build"
           files: ./target/release/frostflake-rs.exe
