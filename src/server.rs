@@ -23,10 +23,7 @@ use std::{
     path::Path,
     sync::{Arc, Mutex},
 };
-use tower_http::{
-    cors::{Any, CorsLayer},
-    trace::TraceLayer,
-};
+use tower_http::cors::{Any, CorsLayer};
 use uuid::Uuid;
 
 #[derive(PartialEq)]
@@ -337,8 +334,6 @@ pub async fn start_server() {
         yas_update_state: Mutex::new(YasUpdateState::NoUpdate),
     });
 
-    tracing_subscriber::fmt().with_max_level(tracing::Level::DEBUG).init();
-
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
@@ -354,8 +349,12 @@ pub async fn start_server() {
         .route("/api/upgrade/yas", post(api_post_upgrade_yas).get(api_get_upgrade_yas))
         .route("/api/yas", get(api_yas))
         .layer(cors)
-        .layer(TraceLayer::new_for_http())
         .with_state(shared_state);
+
+    #[cfg(feature = "tracing-log")]
+    tracing_subscriber::fmt().with_max_level(tracing::Level::DEBUG).init();
+    #[cfg(feature = "tracing-log")]
+    let app = app.layer(tower_http::trace::TraceLayer::new_for_http());
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:32333").await.unwrap();
     axum::serve(listener, app).await.unwrap();
