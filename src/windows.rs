@@ -1,10 +1,11 @@
 use serde::Serialize;
 use windows::{
-    core::Result,
+    core::{Result, HSTRING},
     Win32::{
         Foundation::{BOOL, HWND, LPARAM},
-        UI::WindowsAndMessaging::{SetForegroundWindow, EnumWindows, GetClassNameW, GetWindowRect, GetWindowTextW, IsWindowVisible, SetWindowPos},
+        UI::WindowsAndMessaging::{EnumWindows, GetClassNameW, GetWindowRect, GetWindowTextW, SetForegroundWindow},
     },
+    UI::Notifications::{ToastNotification, ToastNotificationManager, ToastTemplateType},
 };
 
 #[derive(Debug, Serialize)]
@@ -35,6 +36,24 @@ pub fn active_window(hwnd: usize) -> Result<()> {
         let hwnd = HWND(hwnd as *mut _);
         let _ = SetForegroundWindow(hwnd);
     }
+    Ok(())
+}
+
+pub fn notify_message(title: &str, message: &str) -> Result<()> {
+    let template = ToastTemplateType::ToastText01;
+    let toast_xml = ToastNotificationManager::GetTemplateContent(template).unwrap();
+    let text_elements = toast_xml.GetElementsByTagName(&HSTRING::from("text")).unwrap();
+    text_elements
+        .Item(0)
+        .unwrap()
+        .AppendChild(&toast_xml.CreateTextNode(&HSTRING::from(message)).unwrap())
+        .unwrap();
+    let toast = ToastNotification::CreateToastNotification(&toast_xml).unwrap();
+
+    let app_id = HSTRING::from(title);
+    let notifier = ToastNotificationManager::CreateToastNotifierWithId(&app_id).expect("CreateToastNotifier failed");
+    notifier.Show(&toast).expect("Show failed");
+    println!("Toast notification sent!");
     Ok(())
 }
 

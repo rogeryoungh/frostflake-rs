@@ -6,4 +6,4 @@
 
 ## 可能导致的问题
 
-- 霜华 [使用注册表提供 URI 启动的功能](https://learn.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-developer/platform-apis/aa767914(v=vs.85))，本程序为了完全替代，会覆盖该注册表项。 
+- 霜华 [使用注册表提供 URI 启动的功能](https://learn.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-developer/platform-apis/aa767914(v=vs.85))，本程序为了替代，会覆盖该注册表项。 

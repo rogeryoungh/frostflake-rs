@@ -1,6 +1,6 @@
 use crate::{
     utils::prompt_user,
-    windows::{active_window, list_windows},
+    windows::{active_window, list_windows, notify_message},
 };
 
 use axum::{
@@ -16,7 +16,11 @@ use axum::{
 
 use serde_json::{json, Value};
 use std::{
-    collections::HashSet, env, fs, io::{BufRead, BufReader, Write}, path::Path, sync::{Arc, Mutex}
+    collections::HashSet,
+    env, fs,
+    io::{BufRead, BufReader, Write},
+    path::Path,
+    sync::{Arc, Mutex},
 };
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -47,6 +51,7 @@ async fn api_root() -> Json<Value> {
 
 async fn api_token(header_map: HeaderMap, State(state): State<Arc<AppState>>) -> Json<Value> {
     let url = header_map.get("Origin").unwrap().to_str().unwrap();
+    notify_message("frostflake", &format!("New request from {}", url)).unwrap();
     let message = format!(
         "Request from {}\nAre you sure you want to generate a new token? [y/N] ",
         url
@@ -239,9 +244,9 @@ pub async fn start_server() {
     tracing_subscriber::fmt().with_max_level(tracing::Level::DEBUG).init();
 
     let cors = CorsLayer::new()
-        .allow_origin(Any) // 允许所有来源
-        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS]) // 允许的 HTTP 方法
-        .allow_headers(Any); // 允许携带身份验证信息（如 Cookie、Authorization）
+        .allow_origin(Any)
+        .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE, Method::OPTIONS])
+        .allow_headers(Any);
 
     let app = Router::new()
         .route("/", get(api_root))
