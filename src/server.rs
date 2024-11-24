@@ -116,7 +116,6 @@ async fn yas_check_update() -> (String, String, String) {
         .await
         .unwrap();
 
-    println!("github response {:?}", github_response);
     let latest_version = github_response["tag_name"].as_str().unwrap().to_string();
     let latest_update = github_response["published_at"].as_str().unwrap().to_string();
     let mut latest_url = String::new();
@@ -148,7 +147,6 @@ async fn yas_update(state: Arc<AppState>) {
     let config_content = fs::File::open(Path::new(&config_path)).unwrap();
     let config_content: Value = serde_json::from_reader(config_content).unwrap();
     let config_update = config_content["update_at"].as_str().unwrap();
-    println!("config file {:?}", config_content);
 
     let (latest_version, latest_update, latest_url) = yas_check_update().await;
 
@@ -156,7 +154,11 @@ async fn yas_update(state: Arc<AppState>) {
     let latest_update_time = DateTime::parse_from_rfc3339(&latest_update).unwrap();
 
     if latest_update_time > config_update_time {
-        let update_message = format!("yas 最新版本 {}，当前版本 {}，正在下载更新", config_content["version"], latest_version);
+        let update_message = format!(
+            "yas 最新版本 {}，当前版本 {}，正在下载更新",
+            config_content["version"], latest_version
+        );
+        println!("{}", update_message);
         notify_message("frostflake", &update_message).unwrap();
         {
             let mut yas_state = state.yas_update_state.lock().unwrap();
@@ -178,6 +180,7 @@ async fn yas_update(state: Arc<AppState>) {
             *yas_state = YasUpdateState::Done;
         });
     } else {
+        println!("yas 最新版本 {}，无需更新", latest_version);
         let mut yas_state = state.yas_update_state.lock().unwrap();
         *yas_state = YasUpdateState::NoUpdate;
     }
@@ -232,7 +235,6 @@ async fn api_get_upgrade_yas(State(state): State<Arc<AppState>>) -> Response<axu
 async fn make_internal_request(method: &str, url: &str, body: String) -> Value {
     let url = &format!("http://127.0.0.1:32333{}", url);
     let method = method.to_uppercase();
-    println!("internal {}", url);
 
     let client = reqwest::Client::new();
 
@@ -318,7 +320,7 @@ async fn handle_ws(mut socket: WebSocket) {
                 send_json!(&json!({"action": "yas","data": "load"}));
                 for line in reader.lines() {
                     let line = line.unwrap();
-                    println!("line: {}", line);
+                    println!("{}", line);
                     send_json!(&json!({"action": "yas-output", "data": line}));
                 }
                 send_json!(&json!({"action": "yas","data": "exit"}));

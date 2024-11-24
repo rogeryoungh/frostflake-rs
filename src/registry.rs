@@ -38,7 +38,7 @@ pub fn create_scheme_registration(scheme: &str, path: &str) {
 
     let (hkey_scheme, _) = hkey_root
         .create_subkey(scheme)
-        .expect("Failed to edit registry.\nDo you have Administrator permission?");
+        .expect("编辑注册表失败了喵！\n要不要检查一下有没有开启管理员权限呀？(≧◡≦)");
 
     hkey_scheme.set_value("", &uri_protocol_str).unwrap();
     hkey_scheme.set_value("URL Protocol", &"").unwrap();
@@ -47,5 +47,5 @@ pub fn create_scheme_registration(scheme: &str, path: &str) {
     hkey_icon.set_value("", &icon_path_str).unwrap();
     hkey_open.set_value("", &command_str).unwrap();
 
-    println!("Registration for scheme `{}` has been updated", scheme);
+    println!("注册表已更新。");
 }

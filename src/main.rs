@@ -20,10 +20,7 @@ async fn main() {
     println!("当前程序路径是：`{}`。", exe_path);
     if let Some(hkey_path_reg) = get_registration_path("cocogoat-control") {
         let hkey_path = hkey_path_reg.split('"').nth(1).unwrap();
-        println!(
-            "在注册表中读取到自定义协议 `cocogoat-control` 的注册信息，指向路径：`{}`。",
-            hkey_path
-        );
+        println!("在注册表中读取到注册信息，路径：`{}`。", hkey_path);
         need_register = hkey_path != exe_path;
     } else {
         println!("未在注册表中读取到自定义协议 `cocogoat-control`。");
@@ -34,7 +31,7 @@ async fn main() {
         let excepted_exe_path = "C:\\Program Files\\frostflake-rs\\frostflake-rs.exe";
         if excepted_exe_path != exe_path {
             println!(
-                "警告：该程序需要管理员权限，我们建议安装到路径 `{}`，以避免安全问题。",
+                "⚠️ 提醒：这个程序需要管理员权限哦~ 我们建议安装到路径 {}，这样可以更好地避免安全问题喵！",
                 excepted_exe_path
             );
             if prompt_user("是否需要自动安装到建议路径？请输入 [Y/N] ") == "Y" {
