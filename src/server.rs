@@ -1,5 +1,5 @@
 use crate::{
-    utils::prompt_user,
+    utils::{download, prompt_user},
     windows::{active_window, enable_virtual_terminal_sequences, list_windows, notify_message},
 };
 
@@ -14,6 +14,7 @@ use axum::{
     Json, Router,
 };
 
+use chrono::DateTime;
 use serde_json::{json, Value};
 use std::{
     collections::HashSet,
@@ -21,6 +22,7 @@ use std::{
     io::{BufRead, BufReader, Write},
     path::Path,
     sync::{Arc, Mutex},
+    thread,
 };
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -28,9 +30,17 @@ use tower_http::{
 };
 use uuid::Uuid;
 
+#[derive(PartialEq)]
+enum YasUpdateState {
+    Prechecking,
+    Downloading,
+    Done,
+    NoUpdate,
+}
+
 struct AppState {
     authorized_tokens: Mutex<HashSet<Uuid>>,
-    yas_update: Mutex<i32>,
+    yas_update_state: Mutex<YasUpdateState>,
 }
 
 impl AppState {
@@ -52,10 +62,7 @@ async fn api_root() -> Json<Value> {
 async fn api_token(header_map: HeaderMap, State(state): State<Arc<AppState>>) -> Json<Value> {
     let url = header_map.get("Origin").unwrap().to_str().unwrap();
     notify_message("frostflake", &format!("收到来自 {} 的新请求", url)).unwrap();
-    let message = format!(
-        "来自 {} 的请求\n确定要生成新的令牌吗？[Y/N] ",
-        url
-    );
+    let message = format!("来自 {} 的请求\n确定要生成新的令牌吗？[Y/N] ", url);
     if prompt_user(&message) == "Y" {
         let id = Uuid::new_v4();
         state.insert(id);
@@ -98,48 +105,154 @@ async fn api_ws(uri: axum::http::Uri, ws: WebSocketUpgrade, State(state): State<
         .unwrap();
 }
 
-async fn api_upgrade_yas(State(state): State<Arc<AppState>>) -> Response<axum::body::Body> {
-    let mut count = state.yas_update.lock().unwrap();
-    *count += 1;
-    if count.eq(&1) {
+async fn yas_check_update() -> (String, String, String) {
+    let github_response: Value = reqwest::Client::new()
+        .get("https://api.github.com/repos/wormtql/yas/releases/latest")
+        .header("User-Agent", &format!("frostflake/{}", env!("CARGO_PKG_VERSION")))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+
+    println!("github response {:?}", github_response);
+    let latest_version = github_response["tag_name"].as_str().unwrap().to_string();
+    let latest_update = github_response["published_at"].as_str().unwrap().to_string();
+    let mut latest_url = String::new();
+    for asset in github_response["assets"].as_array().unwrap() {
+        let name = asset["name"].as_str().unwrap();
+        if name == format!("yas_{}.exe", latest_version) {
+            latest_url = asset["browser_download_url"].as_str().unwrap().to_owned();
+            break;
+        }
+        if name == format!("yas_artifact_{}.exe", latest_version) {
+            latest_url = asset["browser_download_url"].as_str().unwrap().to_owned();
+            break;
+        }
+    }
+    return (latest_version, latest_update, latest_url);
+}
+
+async fn yas_update(state: Arc<AppState>) {
+    let config_path = env::current_dir().unwrap().join("yas_version.json");
+    if !&config_path.exists() {
+        let init = json!({
+            "version": "null",
+            "update_at": "2011-08-16T00:00:00Z",
+            "url": "https://example.com/"
+        });
+        let file = fs::File::create(&config_path).unwrap();
+        serde_json::to_writer_pretty(file, &init).unwrap();
+    }
+    let config_content = fs::File::open(Path::new(&config_path)).unwrap();
+    let config_content: Value = serde_json::from_reader(config_content).unwrap();
+    let config_update = config_content["update_at"].as_str().unwrap();
+    println!("config file {:?}", config_content);
+
+    let (latest_version, latest_update, latest_url) = yas_check_update().await;
+
+    let config_update_time = DateTime::parse_from_rfc3339(config_update).unwrap();
+    let latest_update_time = DateTime::parse_from_rfc3339(&latest_update).unwrap();
+
+    if latest_update_time > config_update_time {
+        let update_message = format!("yas 最新版本 {}，当前版本 {}，正在下载更新", config_content["version"], latest_version);
+        notify_message("frostflake", &update_message).unwrap();
+        {
+            let mut yas_state = state.yas_update_state.lock().unwrap();
+            *yas_state = YasUpdateState::Downloading;
+        }
+        tokio::spawn(async move {
+            let config_path = env::current_dir().unwrap().join("yas_version.json");
+            let config_path = Path::new(&config_path);
+            download(&latest_url, "yas_artifact.exe").await;
+            notify_message("frostflake", "更新下载完成").unwrap();
+            let version_file = fs::File::create(config_path).unwrap();
+            let new_version = json!({
+                "version": latest_version,
+                "update_at": latest_url,
+                "url": latest_url
+            });
+            serde_json::to_writer_pretty(version_file, &new_version).unwrap();
+            let mut yas_state = state.yas_update_state.lock().unwrap();
+            *yas_state = YasUpdateState::Done;
+        });
+    } else {
+        let mut yas_state = state.yas_update_state.lock().unwrap();
+        *yas_state = YasUpdateState::NoUpdate;
+    }
+}
+
+async fn api_post_upgrade_yas(State(state): State<Arc<AppState>>) -> Response<axum::body::Body> {
+    let mut yas_state = state.yas_update_state.lock().unwrap();
+    if *yas_state == YasUpdateState::NoUpdate || *yas_state == YasUpdateState::Done {
+        *yas_state = YasUpdateState::Prechecking;
+        let state_clone = Arc::clone(&state);
+        tokio::spawn(async move {
+            yas_update(state_clone).await;
+        });
         return Response::builder()
             .status(StatusCode::CREATED)
             .header("Content-Type", "application/json")
-            .body(axum::body::Body::from(json!({"msg": "done"}).to_string()))
+            .body(axum::body::Body::from(json!({"msg": "prechecking"}).to_string()))
             .unwrap();
     } else {
         return Response::builder()
-            .status(StatusCode::OK)
-            .header("Content-Type", "application/json")
-            .body(axum::body::Body::from(json!({"msg": "done"}).to_string()))
+            .status(StatusCode::CONFLICT)
+            .body(axum::body::Body::from(json!({"msg": "failed"}).to_string()))
             .unwrap();
     }
 }
 
-async fn make_internal_request(method: String, url: String, body: String) -> Value {
-    let url = format!("http://127.0.0.1:32333{}", url);
+async fn api_get_upgrade_yas(State(state): State<Arc<AppState>>) -> Response<axum::body::Body> {
+    let state = state.yas_update_state.lock().unwrap();
+    let response = |code, msg| -> Response<axum::body::Body> {
+        return Response::builder()
+            .status(code)
+            .header("Content-Type", "application/json")
+            .body(axum::body::Body::from(json!({"msg": msg}).to_string()))
+            .unwrap();
+    };
+    match *state {
+        YasUpdateState::Prechecking => {
+            return response(StatusCode::ACCEPTED, "prechecking");
+        },
+        YasUpdateState::Downloading => {
+            return response(StatusCode::ACCEPTED, "downloading");
+        },
+        YasUpdateState::Done => {
+            return response(StatusCode::OK, "done");
+        },
+        YasUpdateState::NoUpdate => {
+            return response(StatusCode::OK, "noupdate");
+        },
+    }
+}
+
+async fn make_internal_request(method: &str, url: &str, body: String) -> Value {
+    let url = &format!("http://127.0.0.1:32333{}", url);
     let method = method.to_uppercase();
+    println!("internal {}", url);
 
     let client = reqwest::Client::new();
 
     let request = match method.to_uppercase().as_str() {
-        "GET" => client.get(&url),
-        "POST" => client.post(&url).body(body),
-        "PUT" => client.put(&url).body(body),
-        "PATCH" => client.patch(&url).body(body),
-        "DELETE" => client.delete(&url),
+        "GET" => client.get(url),
+        "POST" => client.post(url).body(body),
+        "PUT" => client.put(url).body(body),
+        "PATCH" => client.patch(url).body(body),
+        "DELETE" => client.delete(url),
         _ => panic!("Unsupported HTTP method"),
     };
     let request = request.header("Accept", "application/json");
 
-    match request.header("Accept", "application/json").send().await {
+    match request.send().await {
         Ok(response) => {
             let status = response.status().as_u16();
-            let body = response.text().await.unwrap();
-            let json = serde_json::from_str::<Value>(&body).unwrap_or_default();
+            let body: Value = response.json().await.unwrap_or_default();
             return json!({
                 "status": status,
-                "body": json,
+                "body": body,
             });
         },
         Err(err) => {
@@ -171,21 +284,21 @@ async fn handle_ws(mut socket: WebSocket) {
     while let Some(Ok(Message::Text(payload))) = socket.recv().await {
         let payload = serde_json::from_str::<Value>(&payload).unwrap();
         if let Some("api") = payload["action"].as_str() {
-            let url = payload["data"]["url"].as_str().unwrap().to_string();
-            let method = payload["data"]["method"].as_str().unwrap().to_string();
-            let body: String = payload["data"]["body"].as_str().unwrap_or_default().to_string();
+            let url = payload["data"]["url"].as_str().unwrap();
+            let method = payload["data"]["method"].as_str().unwrap();
+            let body = payload["data"]["body"].as_str().unwrap_or_default();
             if url != "/api/yas" {
                 let response: Value = json!({
                    "action": "api",
-                   "data": make_internal_request(method, url, body).await,
+                   "data": make_internal_request(method, url, String::from(body)).await,
                    "id": payload["id"],
                 });
                 send_json!(&response);
             } else {
                 let argv = serde_json::from_str::<Value>(&body).unwrap();
                 let argv = argv["argv"].as_str().unwrap();
-                let command = String::from("C:\\Users\\YOUNG\\Downloads\\yas_artifact_v0.1.18.exe");
-                let mut child = std::process::Command::new(&command)
+                let command = Path::new("yas_artifact.exe");
+                let mut child = std::process::Command::new(command)
                     .args(argv.split_whitespace())
                     .stdin(std::process::Stdio::piped())
                     .stdout(std::process::Stdio::piped())
@@ -200,7 +313,7 @@ async fn handle_ws(mut socket: WebSocket) {
                 let reader = BufReader::new(child.stderr.take().unwrap());
                 send_json!(&json!({
                     "action": "yas-output",
-                    "data": format!("{} {}", &command, argv),
+                    "data": format!("{} {}", command.display(), argv),
                 }));
                 send_json!(&json!({"action": "yas","data": "load"}));
                 for line in reader.lines() {
@@ -220,7 +333,7 @@ pub async fn start_server() {
 
     let shared_state = Arc::new(AppState {
         authorized_tokens: Mutex::new(HashSet::new()),
-        yas_update: Mutex::new(0),
+        yas_update_state: Mutex::new(YasUpdateState::NoUpdate),
     });
 
     tracing_subscriber::fmt().with_max_level(tracing::Level::DEBUG).init();
@@ -237,7 +350,7 @@ pub async fn start_server() {
         .route("/api/windows", get(api_api_windows))
         .route("/api/windows/:hwnd", patch(api_patch_windows))
         .route("/ws/:uuid", get(api_ws))
-        .route("/api/upgrade/yas", post(api_upgrade_yas).get(api_upgrade_yas))
+        .route("/api/upgrade/yas", post(api_post_upgrade_yas).get(api_get_upgrade_yas))
         .route("/api/yas", get(api_yas))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
