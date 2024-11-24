@@ -22,7 +22,6 @@ use std::{
     io::{BufRead, BufReader, Write},
     path::Path,
     sync::{Arc, Mutex},
-    thread,
 };
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -308,7 +307,7 @@ async fn handle_ws(mut socket: WebSocket) {
                     .spawn()
                     .unwrap();
                 if let Some(mut stdin) = child.stdin.take() {
-                    if let Err(e) = writeln!(stdin, "114514") {
+                    if let Err(e) = stdin.write(b"114514") {
                         eprintln!("Failed to write to stdin: {}", e);
                     }
                 }
