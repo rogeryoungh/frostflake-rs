@@ -24,8 +24,8 @@ jobs:
       - name: Upload yas_artifact
         uses: actions/upload-artifact@v4
         with:
-          name: frostflake.exe
-          path: ./target/release/frostflake.exe
+          name: frostflake-rs.exe
+          path: ./target/release/frostflake-rs.exe
 
       - uses: "softprops/action-gh-release@v2"
         with:
@@ -33,4 +33,4 @@ jobs:
           tag_name: "dev"
           prerelease: true
           name: "Development Build"
-          files: ./target/release/frostflake.exe
+          files: ./target/release/frostflake-rs.exe
