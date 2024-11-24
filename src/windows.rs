@@ -68,7 +68,6 @@ pub fn notify_message(title: &str, message: &str) -> Result<()> {
     let app_id = HSTRING::from(title);
     let notifier = ToastNotificationManager::CreateToastNotifierWithId(&app_id).expect("CreateToastNotifier failed");
     notifier.Show(&toast).expect("Show failed");
-    println!("Toast notification sent!");
     Ok(())
 }
 

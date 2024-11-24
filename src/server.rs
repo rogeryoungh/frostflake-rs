@@ -51,12 +51,12 @@ async fn api_root() -> Json<Value> {
 
 async fn api_token(header_map: HeaderMap, State(state): State<Arc<AppState>>) -> Json<Value> {
     let url = header_map.get("Origin").unwrap().to_str().unwrap();
-    notify_message("frostflake", &format!("New request from {}", url)).unwrap();
+    notify_message("frostflake", &format!("收到来自 {} 的新请求", url)).unwrap();
     let message = format!(
-        "Request from {}\nAre you sure you want to generate a new token? [y/N] ",
+        "来自 {} 的请求\n确定要生成新的令牌吗？[Y/N] ",
         url
     );
-    if prompt_user(&message) {
+    if prompt_user(&message) == "Y" {
         let id = Uuid::new_v4();
         state.insert(id);
         return Json(json!({
@@ -67,9 +67,7 @@ async fn api_token(header_map: HeaderMap, State(state): State<Arc<AppState>>) ->
             "winver": 11 // TODO!
         }));
     } else {
-        return Json(json!({
-            "message": "Operation cancelled by the user"
-        }));
+        return Json(json!({"message": "Operation cancelled by the user"}));
     }
 }
 
@@ -88,7 +86,6 @@ async fn api_patch_windows(uri: axum::http::Uri) -> Json<Value> {
 }
 
 async fn api_ws(uri: axum::http::Uri, ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
-    println!("path: {}", &uri);
     let uuid_str = uri.path().split('/').last().unwrap();
     if let Ok(uuid) = Uuid::parse_str(uuid_str) {
         if state.contains(&uuid) {
@@ -123,7 +120,6 @@ async fn make_internal_request(method: String, url: String, body: String) -> Val
     let url = format!("http://127.0.0.1:32333{}", url);
     let method = method.to_uppercase();
 
-    println!("method: {}, url: {}", method, url);
     let client = reqwest::Client::new();
 
     let request = match method.to_uppercase().as_str() {
@@ -135,16 +131,12 @@ async fn make_internal_request(method: String, url: String, body: String) -> Val
         _ => panic!("Unsupported HTTP method"),
     };
     let request = request.header("Accept", "application/json");
-    // debug request
-    println!("request: {:?}", request);
 
     match request.header("Accept", "application/json").send().await {
         Ok(response) => {
             let status = response.status().as_u16();
             let body = response.text().await.unwrap();
-            println!("status: {}, body: {}", status, body);
             let json = serde_json::from_str::<Value>(&body).unwrap_or_default();
-
             return json!({
                 "status": status,
                 "body": json,
@@ -210,24 +202,13 @@ async fn handle_ws(mut socket: WebSocket) {
                     "action": "yas-output",
                     "data": format!("{} {}", &command, argv),
                 }));
-                send_json!(&json!({
-                    "action": "yas",
-                    "data": "load",
-                }));
+                send_json!(&json!({"action": "yas","data": "load"}));
                 for line in reader.lines() {
-                    println!("line: {:?}", line);
-                    match line {
-                        Ok(line) => send_json!(&json!({
-                            "action": "yas-output",
-                            "data": line,
-                        })),
-                        Err(_) => todo!(),
-                    }
+                    let line = line.unwrap();
+                    println!("line: {}", line);
+                    send_json!(&json!({"action": "yas-output", "data": line}));
                 }
-                send_json!(&json!({
-                    "action": "yas",
-                    "data": "exit",
-                }));
+                send_json!(&json!({"action": "yas","data": "exit"}));
             }
         }
     }
