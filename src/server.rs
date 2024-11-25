@@ -48,7 +48,7 @@ impl AppState {
         self.authorized_tokens.lock().unwrap().insert(token);
     }
     fn contains_token(&self, token: &Uuid) -> bool {
-        return self.authorized_tokens.lock().unwrap().contains(&token);
+        return self.authorized_tokens.lock().unwrap().contains(token);
     }
     fn get_yas_update_state(&self) -> YasUpdateState {
         return *self.yas_update_state.lock().unwrap();
@@ -69,13 +69,13 @@ impl YasReleaseInfo {
     pub fn read_from_file() -> Result<YasReleaseInfo, Box<dyn Error>> {
         let file = fs::File::open(current_dir_file("yas_version.json"))?;
         let content = serde_json::from_reader(file)?;
-        return Ok(content);
+        Ok(content)
     }
 
     pub fn write_to_file(&self) -> Result<(), Box<dyn Error>> {
         let file = fs::File::create(current_dir_file("yas_version.json"))?;
         serde_json::to_writer_pretty(file, self)?;
-        return Ok(());
+        Ok(())
     }
 
     pub fn newer_than(&self, other: &YasReleaseInfo) -> bool {
@@ -96,10 +96,10 @@ impl Default for YasReleaseInfo {
 }
 
 async fn api_root() -> Json<Value> {
-    return Json(json!({
+    Json(json!({
         "service": "cocogoat-control-rs",
         "version": env!("CARGO_PKG_VERSION")
-    }));
+    }))
 }
 
 async fn api_token(header_map: HeaderMap, State(state): State<Arc<AppState>>) -> Json<Value> {
@@ -109,21 +109,21 @@ async fn api_token(header_map: HeaderMap, State(state): State<Arc<AppState>>) ->
     if prompt_user(&message) == "Y" {
         let id = Uuid::new_v4();
         state.insert_token(id);
-        return Json(json!({
+        Json(json!({
             "hwnd": 114514, // TODO!
             "origin": url,
             "swapEffectUpgrade": false, // TODO!
             "token": id.to_string(),
             "winver": 11 // TODO!
-        }));
+        }))
     } else {
-        return Json(json!({"message": "Operation cancelled by the user"}));
+        Json(json!({"message": "Operation cancelled by the user"}))
     }
 }
 
 async fn api_api_windows() -> Json<Value> {
     let windows = list_windows().unwrap();
-    return Json(json!(windows));
+    Json(json!(windows))
 }
 
 async fn api_patch_windows(uri: axum::http::Uri) -> Json<Value> {
@@ -132,7 +132,7 @@ async fn api_patch_windows(uri: axum::http::Uri) -> Json<Value> {
         let hwnd: usize = hwnd.parse().unwrap();
         active_window(hwnd).unwrap()
     }
-    return Json(json!({}));
+    Json(json!({}))
 }
 
 async fn api_ws(uri: axum::http::Uri, ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
@@ -143,7 +143,7 @@ async fn api_ws(uri: axum::http::Uri, ws: WebSocketUpgrade, State(state): State<
             }
         }
     }
-    return response_json(StatusCode::UNAUTHORIZED, json!({}));
+    response_json(StatusCode::UNAUTHORIZED, json!({}))
 }
 
 async fn yas_check_update() -> Result<YasReleaseInfo, Box<dyn Error>> {
@@ -168,11 +168,11 @@ async fn yas_check_update() -> Result<YasReleaseInfo, Box<dyn Error>> {
             break;
         }
     }
-    return Ok(YasReleaseInfo {
+    Ok(YasReleaseInfo {
         version,
         update_at,
         url,
-    });
+    })
 }
 
 async fn yas_update(state: Arc<AppState>) {
@@ -214,9 +214,9 @@ async fn api_post_upgrade_yas(State(state): State<Arc<AppState>>) -> Response<Bo
         tokio::spawn(async move {
             yas_update(state).await;
         });
-        return response_json(StatusCode::CREATED, json!({"msg": "prechecking"}));
+        response_json(StatusCode::CREATED, json!({"msg": "prechecking"}))
     } else {
-        return response_json(StatusCode::CONFLICT, json!({"msg": "failed"}));
+        response_json(StatusCode::CONFLICT, json!({"msg": "failed"}))
     }
 }
 
@@ -248,7 +248,7 @@ async fn make_internal_request(method: &str, url: &str, body: Value) -> Value {
         Ok(response) => {
             let status = response.status().as_u16();
             let body: Value = response.json().await.unwrap_or_default();
-            return json!({ "status": status, "body": body});
+            json!({ "status": status, "body": body})
         },
         Err(err) => {
             panic!("{}", err)
@@ -262,7 +262,7 @@ async fn api_yas() -> Json<Value> {
         Ok(mona_json) => Json(serde_json::from_reader(&mona_json).unwrap()),
         Err(err) => {
             eprintln!("{}", err);
-            return Json(json!({}));
+            Json(json!({}))
         },
     }
 }
@@ -331,11 +331,11 @@ async fn handle_ws(mut socket: WebSocket) {
 }
 
 fn response_json(code: StatusCode, body: Value) -> Response<Body> {
-    return Response::builder()
+    Response::builder()
         .status(code)
         .header("Content-Type", "application/json")
         .body(Body::from(body.to_string()))
-        .expect("Failed to build response");
+        .expect("Failed to build response")
 }
 
 pub async fn start_server(bind_addr: &str) {

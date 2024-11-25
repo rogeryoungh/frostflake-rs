@@ -72,7 +72,7 @@ unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> B
     let windows = &mut *(lparam.0 as *mut Vec<WindowInfo>);
 
     let get_f_into_string = |f: unsafe fn(HWND, &mut [u16]) -> i32, hwnd: HWND| {
-        let mut buffer = vec![0u16; 1024 as usize];
+        let mut buffer = vec![0u16; 1024_usize];
         if f(hwnd, &mut buffer) > 0 {
             let s = String::from_utf16(&buffer)?;
             Ok(String::from(s.trim_end_matches('\0')))
@@ -109,5 +109,5 @@ unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> B
         });
     }
 
-    return BOOL::from(true); // 返回 true 继续枚举
+    BOOL::from(true)// 返回 true 继续枚举
 }

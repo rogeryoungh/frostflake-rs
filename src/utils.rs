@@ -8,8 +8,7 @@ pub async fn download(url: &str, path: &str) -> Result<(), Box<dyn Error>> {
     let response = reqwest::get(url).await?;
     let bytes = response.bytes().await?;
     let mut file = std::fs::File::create(path)?;
-    file.write(&bytes)?;
-    Ok(())
+    Ok(file.write_all(&bytes)?)
 }
 
 pub fn prompt_user(message: &str) -> String {
@@ -22,7 +21,7 @@ pub fn prompt_user(message: &str) -> String {
 
 pub fn current_dir_file(file_name: &str) -> PathBuf {
     let current_dir = std::env::current_dir().expect("Failed to get current dir");
-    return current_dir.join(file_name);
+    current_dir.join(file_name)
 }
 
 pub fn wait_10s_exit() {

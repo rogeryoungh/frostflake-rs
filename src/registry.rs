@@ -8,7 +8,7 @@ pub fn get_registration_path(scheme: &str) -> Result<String, Box<dyn Error>> {
     let subkey = key.open_subkey("shell\\open\\command")?;
     let value: String = subkey.get_value("")?;
     let path = value.split('"').nth(1).ok_or("Failed to parse path")?;
-    return Ok(path.to_string());
+    Ok(path.to_string())
 }
 
 // https://learn.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-developer/platform-apis/aa767914(v=vs.85)
