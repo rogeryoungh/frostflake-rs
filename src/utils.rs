@@ -1,18 +1,28 @@
-use std::io::{self, Write};
+use std::{
+    error::Error,
+    io::{self, Write},
+    path::PathBuf,
+};
 
-pub async fn download(url: &str, path: &str) {
-    let response = reqwest::get(url).await.unwrap();
-    let bytes = response.bytes().await.unwrap();
-    let mut file = std::fs::File::create(path).unwrap();
-    file.write(&bytes).unwrap();
+pub async fn download(url: &str, path: &str) -> Result<(), Box<dyn Error>> {
+    let response = reqwest::get(url).await?;
+    let bytes = response.bytes().await?;
+    let mut file = std::fs::File::create(path)?;
+    file.write(&bytes)?;
+    Ok(())
 }
 
 pub fn prompt_user(message: &str) -> String {
     print!("{}", message);
-    io::stdout().flush().unwrap(); // 确保提示信息立即输出
+    io::stdout().flush().expect("Failed to flush stdout"); // 确保提示信息立即输出
     let mut input = String::new();
-    io::stdin().read_line(&mut input).unwrap();
+    io::stdin().read_line(&mut input).expect("Failed to read line");
     return input.trim().to_uppercase();
+}
+
+pub fn current_dir_file(file_name: &str) -> PathBuf {
+    let current_dir = std::env::current_dir().expect("Failed to get current dir");
+    return current_dir.join(file_name);
 }
 
 pub fn wait_10s_exit() {
