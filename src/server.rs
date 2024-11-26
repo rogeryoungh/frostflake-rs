@@ -110,7 +110,7 @@ async fn api_root() -> Json<Value> {
     }))
 }
 
-async fn api_token(header_map: HeaderMap, State(state): State<Arc<AppState>>) -> Json<Value> {
+async fn api_token(header_map: HeaderMap, State(state): State<Arc<AppState>>) -> Response {
     let url = header_map.get("Origin").unwrap().to_str().unwrap();
     notify_message("frostflake", &format!("收到来自 {} 的新请求", url)).unwrap();
     let message = format!("来自 {} 的请求\n确定要生成新的令牌吗？[Y/N] ", url);
@@ -118,15 +118,18 @@ async fn api_token(header_map: HeaderMap, State(state): State<Arc<AppState>>) ->
     if prompt_user(&message) == "Y" {
         let id = Uuid::new_v4();
         state.insert_token(id);
-        Json(json!({
-            "hwnd": 114514, // TODO!
-            "origin": url,
-            "swapEffectUpgrade": false, // TODO!
-            "token": id.to_string(),
-            "winver": 11 // TODO!
-        }))
+        response_json(
+            StatusCode::ACCEPTED,
+            json!({
+                "hwnd": 114514, // TODO!
+                "origin": url,
+                "swapEffectUpgrade": false, // TODO!
+                "token": id.to_string(),
+                "winver": 11 // TODO!
+            }),
+        )
     } else {
-        Json(json!({"message": "Operation cancelled by the user"}))
+        response_json(StatusCode::UNAUTHORIZED, json!({}))
     }
 }
 
