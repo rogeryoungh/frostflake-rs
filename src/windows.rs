@@ -4,8 +4,8 @@ use windows::{
     Win32::{
         Foundation::{BOOL, HWND, LPARAM},
         System::Console::{
-            GetConsoleMode, GetStdHandle, SetConsoleMode, CONSOLE_MODE, ENABLE_VIRTUAL_TERMINAL_PROCESSING,
-            STD_OUTPUT_HANDLE,
+            GetConsoleMode, GetConsoleWindow, GetStdHandle, SetConsoleMode, CONSOLE_MODE,
+            ENABLE_VIRTUAL_TERMINAL_PROCESSING, STD_OUTPUT_HANDLE,
         },
         UI::WindowsAndMessaging::{EnumWindows, GetClassNameW, GetWindowRect, GetWindowTextW, SetForegroundWindow},
     },
@@ -51,6 +51,13 @@ pub fn enable_virtual_terminal_sequences() -> Result<()> {
         // 启用虚拟终端处理，支持彩色
         mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
         SetConsoleMode(handle, mode)
+    }
+}
+
+pub fn active_console_window() -> Result<()> {
+    unsafe {
+        let hwnd = GetConsoleWindow();
+        SetForegroundWindow(hwnd).ok()
     }
 }
 

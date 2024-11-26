@@ -1,6 +1,6 @@
 use crate::{
     utils::{current_dir_file, prompt_user},
-    windows::{active_window, enable_virtual_terminal_sequences, list_windows, notify_message},
+    windows::{active_console_window, active_window, enable_virtual_terminal_sequences, list_windows, notify_message},
 };
 
 use axum::{
@@ -114,6 +114,7 @@ async fn api_token(header_map: HeaderMap, State(state): State<Arc<AppState>>) ->
     let url = header_map.get("Origin").unwrap().to_str().unwrap();
     notify_message("frostflake", &format!("收到来自 {} 的新请求", url)).unwrap();
     let message = format!("来自 {} 的请求\n确定要生成新的令牌吗？[Y/N] ", url);
+    active_console_window().unwrap();
     if prompt_user(&message) == "Y" {
         let id = Uuid::new_v4();
         state.insert_token(id);
