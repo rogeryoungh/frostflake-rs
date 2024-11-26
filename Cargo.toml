@@ -33,7 +33,9 @@ reqwest = { version = "0.12", default-features = false, features = [
 	"charset",
 	"macos-system-configuration",
 	"json",
+	"stream"
 ] }
+futures = "0.3"
 
 [features]
 default = []

@@ -1,5 +1,5 @@
 use crate::{
-    utils::{current_dir_file, download, prompt_user},
+    utils::{current_dir_file, prompt_user},
     windows::{active_window, enable_virtual_terminal_sequences, list_windows, notify_message},
 };
 
@@ -16,6 +16,7 @@ use axum::{
 };
 
 use chrono::DateTime;
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
@@ -41,6 +42,7 @@ enum YasUpdateState {
 struct AppState {
     authorized_tokens: Mutex<HashSet<Uuid>>,
     yas_update_state: Mutex<YasUpdateState>,
+    yas_download_state: Mutex<(usize, usize)>,
 }
 
 impl AppState {
@@ -55,6 +57,12 @@ impl AppState {
     }
     fn set_yas_update_state(&self, state: YasUpdateState) {
         *self.yas_update_state.lock().unwrap() = state;
+    }
+    fn get_download_state(&self) -> (usize, usize) {
+        return *self.yas_download_state.lock().unwrap();
+    }
+    fn set_download_state(&self, state: (usize, usize)) {
+        *self.yas_download_state.lock().unwrap() = state;
     }
 }
 
@@ -192,7 +200,21 @@ async fn yas_update(state: Arc<AppState>) {
         notify_message("frostflake", &update_message).unwrap();
 
         state.set_yas_update_state(YasUpdateState::Downloading);
-        download(&latest_info.url, "yas_artifact.exe").await.unwrap();
+
+        // download(&latest_info.url, "yas_artifact.exe").await.unwrap();
+        let mut download_file = fs::File::create(current_dir_file("yas_artifact.exe")).unwrap();
+        let response = reqwest::get(&latest_info.url).await.unwrap();
+        let total_size = response.content_length().unwrap_or(0) as usize;
+        let mut current_size = 0;
+        state.set_download_state((current_size, total_size));
+
+        let mut stream = response.bytes_stream();
+        while let Some(chunk) = stream.next().await {
+            let chunk = chunk.unwrap();
+            current_size += chunk.len();
+            download_file.write_all(&chunk).unwrap();
+            state.set_download_state((current_size, total_size));
+        }
 
         println!("更新下载完成");
         notify_message("frostflake", "更新下载完成").unwrap();
@@ -223,7 +245,13 @@ async fn api_post_upgrade_yas(State(state): State<Arc<AppState>>) -> Response<Bo
 async fn api_get_upgrade_yas(State(state): State<Arc<AppState>>) -> Response<Body> {
     match state.get_yas_update_state() {
         YasUpdateState::Prechecking => response_json(StatusCode::ACCEPTED, json!({"msg": "prechecking"})),
-        YasUpdateState::Downloading => response_json(StatusCode::ACCEPTED, json!({"msg": "downloading"})),
+        YasUpdateState::Downloading => {
+            let (downloaded, total) = state.get_download_state();
+            response_json(
+                StatusCode::ACCEPTED,
+                json!({"msg": "downloading", "downloaded": downloaded, "total": total}),
+            )
+        },
         YasUpdateState::Done => response_json(StatusCode::OK, json!({"msg": "done"})),
         YasUpdateState::NoUpdate => response_json(StatusCode::OK, json!({"msg": "noupdate"})),
     }
@@ -345,6 +373,7 @@ pub async fn start_server(bind_addr: &str) {
     let shared_state = Arc::new(AppState {
         authorized_tokens: Mutex::new(HashSet::new()),
         yas_update_state: Mutex::new(YasUpdateState::NoUpdate),
+        yas_download_state: Mutex::new((0, 114514)),
     });
 
     let cors = CorsLayer::new()
