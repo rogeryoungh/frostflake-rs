@@ -14,6 +14,13 @@ use std::{env, fs, process};
 
 #[tokio::main]
 async fn main() {
+    std::panic::set_hook(Box::new(|panic_info| {
+        // backtrace
+
+        eprintln!("程序发生了一个错误：{}", panic_info);
+        wait_10s_exit();
+    }));
+
     let exe_path = env::current_exe().expect("Failed to get current executable path");
     let exe_dir = exe_path.parent().unwrap();
     env::set_current_dir(exe_dir).expect("Failed to set current directory");
@@ -65,4 +72,5 @@ async fn main() {
     }
 
     start_server("127.0.0.1:32333").await;
+    
 }
