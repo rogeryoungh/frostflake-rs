@@ -16,7 +16,7 @@ use axum::{
 };
 
 use chrono::DateTime;
-use futures::StreamExt;
+use futures::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
@@ -28,6 +28,7 @@ use std::{
     path::Path,
     sync::{Arc, Mutex},
 };
+use tokio::sync::mpsc;
 use tower_http::cors::{Any, CorsLayer};
 use uuid::Uuid;
 
@@ -299,15 +300,7 @@ async fn api_yas() -> Json<Value> {
     }
 }
 
-async fn handle_ws(mut socket: WebSocket) {
-    macro_rules! ws_send_json {
-        ($json:expr) => {
-            socket
-                .send(Message::Text(serde_json::to_string($json).unwrap()))
-                .await
-                .unwrap()
-        };
-    }
+async fn handle_ws(socket: WebSocket) {
     #[derive(Debug, Deserialize)]
     struct ApiData {
         url: String,
@@ -315,7 +308,31 @@ async fn handle_ws(mut socket: WebSocket) {
         body: Option<Value>,
     }
 
-    while let Some(Ok(Message::Text(payload))) = socket.recv().await {
+    let (mut sender, mut receiver) = socket.split();
+    let (tx, mut rx) = mpsc::channel(1);
+
+    enum Task {
+        Output(String),
+        Other(String),
+    }
+
+    let sender_task = tokio::spawn(async move {
+        while let Some(line) = rx.recv().await {
+            match line {
+                Task::Output(line) => {
+                    println!("{}", line);
+                    let json = serde_json::to_string(&json!({"action": "yas-output", "data": line})).unwrap();
+                    sender.send(Message::Text(json)).await.unwrap();
+                },
+                Task::Other(json) => {
+                    // let json = serde_json::to_string(&json).unwrap();
+                    sender.send(Message::Text(json)).await.unwrap();
+                },
+            }
+        }
+    });
+
+    while let Some(Ok(Message::Text(payload))) = receiver.next().await {
         let payload: Value = serde_json::from_str(&payload).unwrap();
         if let Some("api") = payload["action"].as_str() {
             let data: ApiData = serde_json::from_value(payload["data"].clone()).unwrap();
@@ -325,7 +342,7 @@ async fn handle_ws(mut socket: WebSocket) {
                    "data": make_internal_request(&data.method, &data.url, data.body.unwrap_or_default()).await,
                    "id": payload["id"],
                 });
-                ws_send_json!(&response);
+                tx.send(Task::Other(response.to_string())).await.unwrap();
             } else {
                 let argv = {
                     let body = data.body.unwrap();
@@ -333,33 +350,48 @@ async fn handle_ws(mut socket: WebSocket) {
                     body["argv"].as_str().unwrap().to_owned()
                 };
                 let command = current_dir_file("yas_artifact.exe");
+                println!("运行 {} {}", command.display(), argv);
                 let mut child = std::process::Command::new(&command)
                     .args(argv.split_whitespace())
-                    .stdin(std::process::Stdio::piped())
+                    .stdin(std::process::Stdio::inherit())
                     .stdout(std::process::Stdio::piped())
                     .stderr(std::process::Stdio::piped())
                     .spawn()
                     .unwrap();
-                if let Some(mut stdin) = child.stdin.take() {
-                    if let Err(e) = stdin.write(b"114514") {
-                        eprintln!("Failed to write to stdin: {}", e);
+
+                let stdout = child.stdout.take().unwrap();
+                let tx2 = tx.clone();
+                let task1 = tokio::spawn(async move {
+                    let reader = BufReader::new(stdout);
+                    for line in reader.lines() {
+                        let line = line.unwrap();
+                        tx2.send(Task::Output(line)).await.unwrap();
                     }
-                }
-                let reader = BufReader::new(child.stderr.take().unwrap());
-                ws_send_json!(&json!({
-                    "action": "yas-output",
-                    "data": format!("{} {}", command.display(), argv),
-                }));
-                ws_send_json!(&json!({"action": "yas","data": "load"}));
-                for line in reader.lines() {
-                    let line = line.unwrap();
-                    println!("{}", line);
-                    ws_send_json!(&json!({"action": "yas-output", "data": line}));
-                }
-                ws_send_json!(&json!({"action": "yas","data": "exit"}));
+                });
+
+                let stderr = child.stderr.take().unwrap();
+                let tx2 = tx.clone();
+                let task2 = tokio::spawn(async move {
+                    let reader = BufReader::new(stderr);
+                    for line in reader.lines() {
+                        let line = line.unwrap();
+                        tx2.send(Task::Output(line)).await.unwrap();
+                    }
+                });
+
+                tx.send(Task::Output(format!("{} {}", command.display(), argv)))
+                    .await
+                    .unwrap();
+                tx.send(Task::Other(json!({"action": "yas","data": "load"}).to_string()))
+                    .await
+                    .unwrap();
+                tokio::try_join!(task1, task2).unwrap();
+                println!("结束 {} {}", command.display(), argv);
             }
         }
     }
+    drop(tx);
+    tokio::try_join!(sender_task).unwrap();
 }
 
 fn response_json(code: StatusCode, body: Value) -> Response<Body> {
