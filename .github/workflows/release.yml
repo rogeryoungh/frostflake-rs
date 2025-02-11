@@ -1,0 +1,31 @@
+name: Build executables
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Toolchain
+        run: rustup default stable-x86_64-pc-windows-msvc
+
+      - name: Build (Release)
+        run: cargo build --release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frostflake-rs.exe
+          path: ./target/release/frostflake-rs.exe
+
+      - uses: "softprops/action-gh-release@v2"
+        with:
+          files: ./target/release/frostflake-rs.exe
