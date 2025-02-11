@@ -2,7 +2,7 @@ use serde::Serialize;
 use windows::{
     core::{Error, Result, HSTRING},
     Win32::{
-        Foundation::{BOOL, HWND, LPARAM},
+        Foundation::{BOOL, HWND, LPARAM, S_OK},
         System::Console::{
             GetConsoleMode, GetConsoleWindow, GetStdHandle, SetConsoleMode, CONSOLE_MODE,
             ENABLE_VIRTUAL_TERMINAL_PROCESSING, STD_OUTPUT_HANDLE,
@@ -57,7 +57,16 @@ pub fn enable_virtual_terminal_sequences() -> Result<()> {
 pub fn active_console_window() -> Result<()> {
     unsafe {
         let hwnd = GetConsoleWindow();
-        SetForegroundWindow(hwnd).ok()
+        let result = SetForegroundWindow(hwnd).ok();
+        if let Err(err) = result {
+            if err.code() != S_OK {
+                Err(err)
+            } else {
+                Ok(())
+            }
+        } else {
+            Ok(())
+        }
     }
 }
 
