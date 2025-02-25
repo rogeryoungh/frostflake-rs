@@ -18,6 +18,8 @@
 
 **使用**：无需手动启动该程序。[莫娜占卜铺](https://www.mona-uranai.com/) 扫描操作会通过 URI 协议自动拉起本程序，您只需在授权通知出现时同意即可。本程序会自动更新和运行 [YAS](https://github.com/wormtql/yas) 程序。
 
+**已知问题**：yas 有概率输出两三行后卡住，输入回车即可继续运行，尚不清楚原因。
+
 ## 注意事项
 
 - **注册表覆盖**：霜华通过 [注册表 URI 协议](https://learn.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-developer/platform-apis/aa767914(v=vs.85)) 启动 YAS，本程序也采用相同的方式，安装时会覆盖相关注册表项。
