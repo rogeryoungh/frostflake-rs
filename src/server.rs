@@ -385,6 +385,11 @@ async fn handle_ws(socket: WebSocket) {
                 tx.send(Task::Other(json!({"action": "yas","data": "load"}).to_string()))
                     .await
                     .unwrap();
+
+                tx.send(Task::Output("⚠️如果莫名其妙卡在此处请输入回车喵~".to_owned()))
+                    .await
+                    .unwrap();
+
                 tokio::try_join!(task1, task2).unwrap();
                 println!("结束 {} {}", command.display(), argv);
             }
