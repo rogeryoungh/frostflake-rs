@@ -17,7 +17,7 @@ async fn main() {
     std::panic::set_hook(Box::new(|panic_info| {
         // backtrace
 
-        eprintln!("程序发生了一个错误：{}", panic_info);
+        eprintln!("程序发生了一个错误：{panic_info}");
         wait_10s_exit();
     }));
 
@@ -26,16 +26,16 @@ async fn main() {
     env::set_current_dir(exe_dir).expect("Failed to set current directory");
     let exe_path_str = exe_path.display().to_string();
 
-    println!("当前程序路径是：`{}`。", exe_path_str);
+    println!("当前程序路径是：`{exe_path_str}`。");
 
     let need_register = match get_registration_path("cocogoat-control") {
         Ok(hkey_path) => {
-            println!("在注册表中读取到注册信息，路径：`{}`。", hkey_path);
+            println!("在注册表中读取到注册信息，路径：`{hkey_path}`。");
             hkey_path != exe_path_str
         },
         Err(err) => {
             println!("未在注册表中读取到自定义协议 `cocogoat-control`。");
-            eprintln!("{}", err);
+            eprintln!("{err}");
             true
         },
     };
@@ -44,8 +44,7 @@ async fn main() {
         let excepted_exe_path_str: &str = "C:\\Program Files\\frostflake-rs\\frostflake-rs.exe";
         if excepted_exe_path_str != exe_path_str {
             println!(
-                "⚠️ 提醒：这个程序需要管理员权限喵~\n我们建议安装到路径 {}，这样可以更好地避免安全问题喵！",
-                excepted_exe_path_str
+                "⚠️ 提醒：这个程序需要管理员权限喵~\n我们建议安装到路径 {excepted_exe_path_str}，这样可以更好地避免安全问题喵！"
             );
             if prompt_user("是否需要自动安装到建议路径？请输入 [Y/N] ") == "Y" {
                 let excepted_exe_path = Path::new(excepted_exe_path_str);

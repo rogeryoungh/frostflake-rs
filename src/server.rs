@@ -113,8 +113,8 @@ async fn api_root() -> Json<Value> {
 
 async fn api_token(header_map: HeaderMap, State(state): State<Arc<AppState>>) -> Response {
     let url = header_map.get("Origin").unwrap().to_str().unwrap();
-    notify_message("frostflake", &format!("收到来自 {} 的新请求", url)).unwrap();
-    let message = format!("来自 {} 的请求\n确定要生成新的令牌吗？[Y/N] ", url);
+    notify_message("frostflake", &format!("收到来自 {url} 的新请求")).unwrap();
+    let message = format!("来自 {url} 的请求\n确定要生成新的令牌吗？[Y/N] ");
     active_console_window().unwrap();
     if prompt_user(&message) == "Y" {
         let id = Uuid::new_v4();
@@ -140,7 +140,7 @@ async fn api_api_windows() -> Json<Value> {
 }
 
 async fn api_patch_windows(uri: axum::http::Uri) -> Json<Value> {
-    let hwnd = uri.path().split('/').last().unwrap();
+    let hwnd = uri.path().split('/').next_back().unwrap();
     if hwnd != "null" {
         let hwnd: usize = hwnd.parse().unwrap();
         active_window(hwnd).unwrap()
@@ -149,7 +149,7 @@ async fn api_patch_windows(uri: axum::http::Uri) -> Json<Value> {
 }
 
 async fn api_ws(uri: axum::http::Uri, ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
-    if let Some(uuid_str) = uri.path().split('/').last() {
+    if let Some(uuid_str) = uri.path().split('/').next_back() {
         if let Ok(uuid) = Uuid::parse_str(uuid_str) {
             if state.contains_token(&uuid) {
                 return ws.on_upgrade(handle_ws);
@@ -172,8 +172,8 @@ async fn yas_check_update() -> Result<YasReleaseInfo, Box<dyn Error>> {
     let update_at = github_response["published_at"].as_str().unwrap().to_string();
 
     let mut url = String::new();
-    let yas_filename_1 = format!("yas_{}.exe", version);
-    let yas_filename_2 = format!("yas_artifact_{}.exe", version);
+    let yas_filename_1 = format!("yas_{version}.exe");
+    let yas_filename_2 = format!("yas_artifact_{version}.exe");
     for asset in github_response["assets"].as_array().unwrap() {
         let name = asset["name"].as_str().unwrap();
         if name == yas_filename_1 || name == yas_filename_2 {
@@ -263,7 +263,7 @@ async fn api_get_upgrade_yas(State(state): State<Arc<AppState>>) -> Response<Bod
 }
 
 async fn make_internal_request(method: &str, url: &str, body: Value) -> Value {
-    let url = &format!("http://127.0.0.1:32333{}", url);
+    let url = &format!("http://127.0.0.1:32333{url}");
 
     let method = {
         let method = method.to_uppercase().into_bytes();
@@ -294,7 +294,7 @@ async fn api_yas() -> Json<Value> {
     match fs::File::open(Path::new(&mona_json_path)) {
         Ok(mona_json) => Json(serde_json::from_reader(&mona_json).unwrap()),
         Err(err) => {
-            eprintln!("{}", err);
+            eprintln!("{err}");
             Json(json!({}))
         },
     }
@@ -320,7 +320,7 @@ async fn handle_ws(socket: WebSocket) {
         while let Some(line) = rx.recv().await {
             match line {
                 Task::Output(line) => {
-                    println!("{}", line);
+                    println!("{line}");
                     let json = serde_json::to_string(&json!({"action": "yas-output", "data": line})).unwrap();
                     sender.send(Message::Text(json.into())).await.unwrap();
                 },
@@ -408,7 +408,7 @@ fn response_json(code: StatusCode, body: Value) -> Response<Body> {
 }
 
 pub async fn start_server(bind_addr: &str) {
-    println!("Server running on http://{}", bind_addr);
+    println!("Server running on http://{bind_addr}");
     enable_virtual_terminal_sequences().unwrap();
 
     let shared_state = Arc::new(AppState {

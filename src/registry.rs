@@ -31,9 +31,9 @@ pub fn create_scheme_registration(scheme: &str, path: &str) -> Result<(), Box<dy
             .expect("Failed to delete the old registration");
     }
 
-    let uri_protocol_str = format!("URL:{} Protocol", scheme);
-    let icon_path_str = format!("{},1", path);
-    let command_str = format!("\"{}\" \"%1\"", path);
+    let uri_protocol_str = format!("URL:{scheme} Protocol");
+    let icon_path_str = format!("{path},1");
+    let command_str = format!("\"{path}\" \"%1\"");
 
     let (hkey_scheme, _) = hkey_root.create_subkey(scheme)?;
 

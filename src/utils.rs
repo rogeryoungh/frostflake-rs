@@ -12,11 +12,11 @@ pub async fn download(url: &str, path: &str) -> Result<(), Box<dyn Error>> {
 }
 
 pub fn prompt_user(message: &str) -> String {
-    print!("{}", message);
+    print!("{message}");
     io::stdout().flush().expect("Failed to flush stdout"); // 确保提示信息立即输出
     let mut input = String::new();
     io::stdin().read_line(&mut input).expect("Failed to read line");
-    return input.trim().to_uppercase();
+    input.trim().to_uppercase()
 }
 
 pub fn current_dir_file(file_name: &str) -> PathBuf {
