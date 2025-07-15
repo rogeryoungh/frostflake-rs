@@ -322,11 +322,11 @@ async fn handle_ws(socket: WebSocket) {
                 Task::Output(line) => {
                     println!("{}", line);
                     let json = serde_json::to_string(&json!({"action": "yas-output", "data": line})).unwrap();
-                    sender.send(Message::Text(json)).await.unwrap();
+                    sender.send(Message::Text(json.into())).await.unwrap();
                 },
                 Task::Other(json) => {
                     // let json = serde_json::to_string(&json).unwrap();
-                    sender.send(Message::Text(json)).await.unwrap();
+                    sender.send(Message::Text(json.into())).await.unwrap();
                 },
             }
         }

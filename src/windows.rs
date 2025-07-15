@@ -2,7 +2,7 @@ use serde::Serialize;
 use windows::{
     core::{Error, Result, HSTRING},
     Win32::{
-        Foundation::{BOOL, HWND, LPARAM, S_OK},
+        Foundation::{HWND, LPARAM, S_OK},
         System::Console::{
             GetConsoleMode, GetConsoleWindow, GetStdHandle, SetConsoleMode, CONSOLE_MODE,
             ENABLE_VIRTUAL_TERMINAL_PROCESSING, STD_OUTPUT_HANDLE,
@@ -84,7 +84,7 @@ pub fn notify_message(title: &str, message: &str) -> Result<()> {
 }
 
 // 回调函数：被 `EnumWindows` 调用
-unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> BOOL {
+unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> bool {
     let windows = &mut *(lparam.0 as *mut Vec<WindowInfo>);
 
     let get_f_into_string = |f: unsafe fn(HWND, &mut [u16]) -> i32, hwnd: HWND| {
@@ -125,5 +125,5 @@ unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> B
         });
     }
 
-    BOOL::from(true) // 返回 true 继续枚举
+    true // 返回 true 继续枚举
 }
