@@ -8,7 +8,7 @@ axum = { version = "0.8.4", default-features = false, features = ["http1", "json
 serde_json = "1.0"
 tokio = { version = "1", features = ["full"] }
 tower-http = { version = "0.6", features = ["cors"] }
-uuid = { version = "1.11", features = ["v4"] }
+uuid = { version = "1.19", features = ["v4"] }
 windows = { version = "0.61", features = ["Win32_System_Console", "Win32_UI_WindowsAndMessaging", "Data_Xml_Dom", "UI_Notifications"] }
 winreg = "0.55"
 serde = { version = "1.0", features = ["derive"] }
