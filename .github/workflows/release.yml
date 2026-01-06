@@ -21,7 +21,7 @@ jobs:
         run: cargo build --release
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: frostflake-rs.exe
           path: ./target/release/frostflake-rs.exe
