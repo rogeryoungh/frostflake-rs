@@ -4,7 +4,7 @@ version = "1.3.2"
 edition = "2021"
 
 [dependencies]
-axum = { version = "0.8.4", default-features = false, features = ["http1", "json", "matched-path", "original-uri", "ws"] }
+axum = { version = "0.8.8", default-features = false, features = ["http1", "json", "matched-path", "original-uri", "ws"] }
 serde_json = "1.0"
 tokio = { version = "1", features = ["full"] }
 tower-http = { version = "0.6", features = ["cors"] }
