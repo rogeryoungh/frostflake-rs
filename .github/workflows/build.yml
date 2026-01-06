@@ -5,6 +5,7 @@ on:
     branches:
       - main
   workflow_dispatch:
+  pull_request:
 
 env:
   CARGO_TERM_COLOR: always
@@ -34,9 +35,11 @@ jobs:
           path: ./target/release/frostflake-rs.exe
 
       - name: Update Latest Tag
+        if: github.ref == 'refs/heads/main'
         uses: EndBug/latest-tag@latest
 
       - uses: "softprops/action-gh-release@v2"
+        if: github.ref == 'refs/heads/main'
         with:
           tag_name: "latest"
           prerelease: true
