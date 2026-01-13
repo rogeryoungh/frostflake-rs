@@ -93,7 +93,7 @@ unsafe extern "system" fn enum_windows_callback(hwnd: HWND, lparam: LPARAM) -> B
             let s = String::from_utf16(&buffer)?;
             Ok(String::from(s.trim_end_matches('\0')))
         } else {
-            Err(Error::from_win32())
+            Err(Error::from_thread())
         }
     };
 
