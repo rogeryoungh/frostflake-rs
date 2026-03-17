@@ -10,7 +10,7 @@ tokio = { version = "1", features = ["full"] }
 tower-http = { version = "0.6", features = ["cors"] }
 uuid = { version = "1.22", features = ["v4"] }
 windows = { version = "0.62", features = ["Win32_System_Console", "Win32_UI_WindowsAndMessaging", "Data_Xml_Dom", "UI_Notifications"] }
-winreg = "0.55"
+winreg = "0.56"
 serde = { version = "1.0", features = ["derive"] }
 tracing = { version = "0.1", optional = true }
 tracing-subscriber = { version = "0.3", optional = true, features = [
