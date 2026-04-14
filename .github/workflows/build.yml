@@ -38,7 +38,7 @@ jobs:
         if: github.ref == 'refs/heads/main'
         uses: EndBug/latest-tag@latest
 
-      - uses: "softprops/action-gh-release@v2"
+      - uses: "softprops/action-gh-release@v3"
         if: github.ref == 'refs/heads/main'
         with:
           tag_name: "latest"

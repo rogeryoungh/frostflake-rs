@@ -26,6 +26,6 @@ jobs:
           name: frostflake-rs.exe
           path: ./target/release/frostflake-rs.exe
 
-      - uses: "softprops/action-gh-release@v2"
+      - uses: "softprops/action-gh-release@v3"
         with:
           files: ./target/release/frostflake-rs.exe
